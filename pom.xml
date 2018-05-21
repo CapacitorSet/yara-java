@@ -112,9 +112,9 @@
                                 <dirset dir="${project.build.directory}/generated-sources/hawtjni/lib/META-INF/native/" id="platform">
                                     <include name="*" />
                                 </dirset>
-                                <copy file="${project.basedir}/../yara"
+                                <copy file="${project.basedir}/../yara/yara"
                                       tofile="${project.build.directory}/generated-sources/hawtjni/lib/META-INF/native/${toString:platform}/yara"/>
-                                <copy file="${project.basedir}/../yarac"
+                                <copy file="${project.basedir}/../yara/yarac"
                                       tofile="${project.build.directory}/generated-sources/hawtjni/lib/META-INF/native/${toString:platform}/yarac"/>
                                 <jar destfile="${project.build.directory}/${project.artifactId}-${project.version}-${toString:platform}.jar"
                                         basedir="${project.build.directory}/generated-sources/hawtjni/lib/"
@@ -134,9 +134,9 @@
                                 <dirset dir="${project.build.directory}/generated-sources/hawtjni/lib/META-INF/native/" id="platform">
                                     <include name="*" />
                                 </dirset>
-                                <copy file="${project.basedir}/../yara"
+                                <copy file="${project.basedir}/../yara/yara"
                                       tofile="${project.build.directory}/test-classes/META-INF/native/${toString:platform}/yara"/>
-                                <copy file="${project.basedir}/../yarac"
+                                <copy file="${project.basedir}/../yara/yarac"
                                       tofile="${project.build.directory}/test-classes/META-INF/native/${toString:platform}/yarac"/>
                             </target>
                         </configuration>

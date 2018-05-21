@@ -1,4 +1,10 @@
-[![Build Status](https://travis-ci.org/p8a/yara-java.svg)](https://travis-ci.org/p8a/yara-java)
+This module is for internal usage in [elasticsearch-yara](https://github.com/CapacitorSet/elasticsearch-yara). For other scenarios, use at your own risk.
+
+The [original repository](https://github.com/p8a/yara-java) is licensed Apache 2.0. Refer to the commit history for the list of changes.
+
+The original README follows with small fixes.
+
+---
 
 Highlights
 ------------
@@ -29,7 +35,15 @@ make
 
 ### Get and build yara-java
 
-Example (in "yara" folder):
+```
+my-project
+ |
+ +-- yara
+ |
+ +-- yara-java
+```
+
+Example (in the same folder as "yara"):
 
 ```
 git clone https://github.com/p8a/yara-java.git
