@@ -1,10 +1,15 @@
 package com.github.plusvic.yara;
 
-/**
- * Yara wrapper
- */
-public interface Yara extends AutoCloseable {
-    YaraCompiler createCompiler();
+
+public class Yara implements AutoCloseable {
+    public YaraCompiler createCompiler() {
+        return new YaraCompiler();
+    }
   
-    void finalizeThread();
+    public void finalizeThread() {
+    }
+
+    @Override
+    public void close() throws Exception {
+    }
 }

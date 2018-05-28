@@ -1,13 +1,6 @@
-package com.github.plusvic.yara.external;
+package com.github.plusvic.yara;
 
-import com.github.plusvic.yara.Utils;
-import com.github.plusvic.yara.YaraException;
-import com.github.plusvic.yara.YaraScanCallback;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -22,50 +15,35 @@ public class YaraExecutable {
     private int timeout = 60;
     private boolean negate = false;
     private int maxRules = 0;
-    private NativeExecutable executable;
     private Set<Path> rules = new HashSet<>();
 
-    public YaraExecutable() {
-        this.executable = YaraExecutableManager.getYara();
-    }
+    YaraExecutable() { }
 
-    public YaraExecutable(NativeExecutable executable) {
-        if (executable == null) {
-            throw new IllegalArgumentException();
-        }
-        this.executable = executable;
-        this.executable.load();
-    }
-
-    public YaraExecutable addRule(Path file) {
+    public void addRule(Path file) {
         if (!Utils.exists(file)) {
             throw new IllegalArgumentException();
         }
 
         rules.add(file);
-        return this;
     }
 
-    public YaraExecutable setTimeout(int timeout) {
+    public void setTimeout(int timeout) {
         checkArgument(timeout > 0);
         this.timeout = timeout;
 
-        return this;
     }
 
-    public YaraExecutable setMaxRules(int count) {
+    public void setMaxRules(int count) {
         checkArgument(count > 0);
         this.maxRules = count;
 
-        return this;
     }
 
-    public YaraExecutable setNegate(boolean value) {
+    public void setNegate(boolean value) {
         this.negate = value;
-        return this;
     }
 
-    private String[] getCommandLine(Path target, Map<String, String> moduleArgs) {
+    private String getCommandLine(Path target, Map<String, String> moduleArgs) {
         List<String> args = new ArrayList<>();
         args.add("-g"); // tags
         args.add("-m"); // meta
@@ -96,7 +74,7 @@ public class YaraExecutable {
         // sample
         args.add(target.toAbsolutePath().toString());
 
-        return args.toArray(new String[]{});
+        return String.join(" ", args);
     }
 
     public boolean match(Path target, Map<String, String> moduleArgs, YaraScanCallback callback) throws Exception {
@@ -105,7 +83,8 @@ public class YaraExecutable {
         }
 
         try {
-            Process process = executable.execute(getCommandLine(target, moduleArgs));
+            Runtime rt = Runtime.getRuntime();
+            Process process = rt.exec("yara " + getCommandLine(target, moduleArgs));
             process.waitFor(timeout, TimeUnit.SECONDS);
 
             try (BufferedReader pout = new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -133,19 +112,20 @@ public class YaraExecutable {
         }
     }
 
-    public boolean match(byte buffer[], Map<String, String> moduleArgs, YaraScanCallback callback) throws Exception {
+    public boolean match(byte buffer[], Map<String, String> moduleArgs, YaraScanCallback callback) throws IOException, InterruptedException {
         if (buffer == null || callback == null) {
             throw new IllegalArgumentException();
         }
 
-        File ftmp = File.createTempFile("yara-",".dat");
+        File ftmp = File.createTempFile("yara-",".dat", new File("/tmp"));
         try (FileOutputStream fos = new FileOutputStream(ftmp)) {
             fos.write(buffer);
         }
 
         Path target = ftmp.toPath();
         try {
-            Process process = executable.execute(getCommandLine(target, moduleArgs));
+            Runtime rt = Runtime.getRuntime();
+            Process process = rt.exec("yara " + getCommandLine(target, moduleArgs));
             process.waitFor(timeout, TimeUnit.SECONDS);
 
             try (BufferedReader pout = new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -166,15 +146,9 @@ public class YaraExecutable {
             }
 
             return true;
-        }
-        catch (Throwable t) {
-            LOGGER.log(Level.WARNING, "Failed to match rules: {0}", t.getMessage());
-            throw t;
         } finally {
-            if (ftmp != null) {
-                if (! ftmp.delete()) {
-                    LOGGER.log(Level.WARNING, "Failed to delete tmp file {0}", ftmp);
-                }
+            if (!ftmp.delete()) {
+                LOGGER.log(Level.WARNING, "Failed to delete tmp file {0}", ftmp);
             }
         }
     }

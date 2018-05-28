@@ -1,4 +1,4 @@
-package com.github.plusvic.yara.external;
+package com.github.plusvic.yara;
 
 import java.util.ArrayList;
 import java.util.Arrays;

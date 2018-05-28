@@ -1,7 +1,4 @@
-package com.github.plusvic.yara.external;
-
-import com.github.plusvic.yara.Utils;
-import com.github.plusvic.yara.YaraCompilationCallback;
+package com.github.plusvic.yara;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -31,21 +28,9 @@ public class YaracExecutable {
     public static final String GLOBAL_NAMESPACE = "";
 
     private int timeout = 60;
-    private NativeExecutable executable;
     private Map<String, Set<Path>> rules = new HashMap<>();
 
-    public YaracExecutable() {
-        this.executable = YaraExecutableManager.getYarac();
-    }
-
-    public YaracExecutable(NativeExecutable executable) {
-        if (executable == null) {
-            throw new IllegalArgumentException();
-        }
-        this.executable = executable;
-        this.executable.load();
-    }
-
+    YaracExecutable() { }
 
     public YaracExecutable addRule(Path file) {
         return addRule(GLOBAL_NAMESPACE, file);
@@ -56,11 +41,7 @@ public class YaracExecutable {
             throw new IllegalArgumentException();
         }
 
-        Set<Path> paths = rules.get(namespace);
-        if (paths == null) {
-            paths = new HashSet<>();
-            rules.put(namespace, paths);
-        }
+        Set<Path> paths = rules.computeIfAbsent(namespace, k -> new HashSet<>());
 
         paths.add(file);
 
@@ -74,7 +55,7 @@ public class YaracExecutable {
         return this;
     }
 
-    private String[] getCommandLine(Path output) {
+    private String getCommandLine(Path output) {
         List<String> args = new ArrayList<>();
 
         for (Map.Entry<String, Set<Path>> kv : rules.entrySet()) {
@@ -87,7 +68,7 @@ public class YaracExecutable {
 
         args.add(output.toAbsolutePath().toString());
 
-        return args.toArray(new String[args.size()]);
+        return String.join(" ", args);
     }
 
     public Path compile(YaraCompilationCallback callback) throws Exception {
@@ -96,9 +77,10 @@ public class YaracExecutable {
         }
 
         try {
-            Path output = File.createTempFile(UUID.randomUUID().toString(), "yaracc").toPath();
+            Runtime rt = Runtime.getRuntime();
+            Path output = File.createTempFile(UUID.randomUUID().toString(), "yaracc", new File("/tmp")).toPath();
 
-            Process process = executable.execute(getCommandLine(output));
+            Process process = rt.exec("yarac " + getCommandLine(output));
             process.waitFor(timeout, TimeUnit.SECONDS);
 
             try (BufferedReader pout = new BufferedReader(new InputStreamReader(process.getInputStream()));

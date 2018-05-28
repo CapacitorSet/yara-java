@@ -1,50 +1,170 @@
 package com.github.plusvic.yara;
 
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
-/**
- * Yara compiler
- **/
-public interface YaraCompiler extends AutoCloseable {
-    /**
-     * Set compilation callback
-     *
-     * @param cbk
-     */
-    void setCallback(YaraCompilationCallback cbk);
+import static com.github.plusvic.yara.Preconditions.checkArgument;
 
-    /**
-     * Add rules content
-     *
-     * @param content
-     * @param namespace
-     * @return
-     */
-    void addRulesContent(String content, String namespace);
+public class YaraCompiler implements AutoCloseable {
+    private static final Logger LOGGER = Logger.getLogger(YaraCompiler.class.getName());
 
-    /**
-     * Add rules file
-     *
-     * @param filePath
-     * @param fileName
-     * @param namespace
-     * @return
-     */
-    void addRulesFile(String filePath, String fileName, String namespace);
+    private YaraCompilationCallback callback;
+    private List<Path> packages = new ArrayList<>();
+    private YaracExecutable yarac;
+    private Path   rules;
 
-    /**
-     * Add all rules from package (zip archive)
-     *
-     * @param packagePath
-     * @param namespace
-     * @return
-     */
-    void addRulesPackage(String packagePath, String namespace);
+    public YaraCompiler() {
+        this.rules = null;
+        this.yarac = new YaracExecutable();
+    }
 
-    /**
-     * Create scanner
-     *
-     * @return
-     */
-    YaraScanner createScanner();
+    public void setCallback(YaraCompilationCallback cbk) {
+        checkArgument(cbk != null);
+        this.callback = cbk;
+    }
+
+    public void addRulesContent(String content, String namespace) {
+        checkArgument(!Utils.isNullOrEmpty(content));
+
+        if (rules != null) {
+            // Mimic embedded behavior
+            throw new YaraException(ErrorCode.INSUFFICIENT_MEMORY.getValue());
+        }
+
+        try {
+            String ns = (namespace != null ? namespace : YaracExecutable.GLOBAL_NAMESPACE);
+            Path rule = File.createTempFile(UUID.randomUUID().toString(), "yara", new File("/tmp"))
+                    .toPath();
+
+            Files.write(rule, content.getBytes(), StandardOpenOption.WRITE);
+            yarac.addRule(ns, rule);
+        }
+        catch (Throwable t) {
+            LOGGER.log(Level.WARNING, "Failed to add rule content {0}",
+                    t.getMessage());
+            throw new RuntimeException(t);
+        }
+    }
+
+    public void addRulesFile(String filePath, String fileName, String namespace) {
+        checkArgument(!Utils.isNullOrEmpty(filePath));
+        checkArgument(Files.exists(Paths.get(filePath)));
+
+        if (rules != null) {
+            // Mimic embedded behavior
+            throw new YaraException(ErrorCode.INSUFFICIENT_MEMORY.getValue());
+        }
+
+        try {
+            String ns = (namespace != null ? namespace : YaracExecutable.GLOBAL_NAMESPACE);
+            yarac.addRule(ns, Paths.get(filePath));
+        }
+        catch (Throwable t) {
+            LOGGER.log(Level.WARNING, MessageFormat.format("Failed to add rules file {0}: {1}",
+                    filePath, t.getMessage()));
+            throw new RuntimeException(t);
+        }
+    }
+
+    public void addRulesPackage(String packagePath, String namespace) {
+        checkArgument(!Utils.isNullOrEmpty(packagePath));
+        checkArgument(Files.exists(Paths.get(packagePath)));
+
+        LOGGER.fine(String.format("Loading package: %s", packagePath));
+
+        try {
+            Path unpackedFolder = Files.createTempDirectory(Paths.get(UUID.randomUUID().toString()), "/tmp");
+            packages.add(unpackedFolder);
+
+            try (ZipInputStream zis = new ZipInputStream(new FileInputStream(packagePath))) {
+
+                for (ZipEntry ze = zis.getNextEntry(); ze != null; ze = zis.getNextEntry()) {
+                    // Check yara rule
+                    String iname = ze.getName().toLowerCase();
+                    if (!(iname.endsWith(".yar") || iname.endsWith(".yara") || iname.endsWith(".yr"))) {
+                        continue;
+                    }
+
+                    // Read content
+                    LOGGER.fine(String.format("Loading package entry: %s", ze.getName()));
+                    File ruleFile = new File(unpackedFolder + File.separator + ze.getName());
+
+                    new File(ruleFile.getParent()).mkdirs();
+
+                    byte[] buffer = new byte[1024];
+
+                    try (FileOutputStream fos = new FileOutputStream(ruleFile)) {
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            fos.write(buffer, 0, len);
+                        }
+                    }
+
+                    // Load file
+                    addRulesFile(ruleFile.toString(), ze.getName(), namespace);
+                }
+
+                zis.closeEntry();
+                zis.close();
+            }
+
+        }
+        catch(IOException ioe){
+            throw new RuntimeException(ioe);
+        }
+    }
+
+    public YaraScanner createScanner() {
+        try {
+            if (rules == null) {
+                rules = yarac.compile(callback);
+            }
+            return new YaraScanner(rules);
+        }
+        catch (Exception e) {
+            throw new YaraException(e.getMessage());
+        }
+    }
+
+    @Override
+    public void close() throws Exception {
+        for (Path p : packages) {
+            try {
+                Files.walkFileTree(p, new SimpleFileVisitor<Path>() {
+                    @Override
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                        Files.delete(file);
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+                        Files.delete(file);
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                        if (exc == null) {
+                            Files.delete(dir);
+                            return FileVisitResult.CONTINUE;
+                        }
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
+            }
+            catch (IOException ioe) {
+                LOGGER.warning(String.format("Failed to delete package %s: %s", p, ioe.getMessage()));
+            }
+        }
+    }
 }

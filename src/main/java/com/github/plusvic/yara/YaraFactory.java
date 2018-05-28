@@ -1,7 +1,5 @@
 package com.github.plusvic.yara;
 
-import com.github.plusvic.yara.embedded.YaraImpl;
-
 /**
  * Yara factory
  */
@@ -13,10 +11,8 @@ public class YaraFactory {
 
     public static Yara create(Mode mode) {
         switch (mode) {
-            case EMBEDDED:
-                return new YaraImpl();
             case EXTERNAL:
-                return new com.github.plusvic.yara.external.YaraImpl();
+                return new Yara();
             default:
                 throw new UnsupportedOperationException();
         }

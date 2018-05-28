@@ -1,8 +1,4 @@
-package com.github.plusvic.yara.external;
-
-import com.github.plusvic.yara.Preconditions;
-import com.github.plusvic.yara.Utils;
-import com.github.plusvic.yara.YaraScanCallback;
+package com.github.plusvic.yara;
 
 import java.util.Iterator;
 
@@ -11,8 +7,8 @@ import static com.github.plusvic.yara.Preconditions.checkArgument;
 
 class YaraOutputProcessor {
     private YaraScanCallback callback;
-    private YaraRuleImpl rule;
-    private YaraStringImpl string;
+    private YaraRule rule;
+    private YaraString string;
 
     public YaraOutputProcessor(YaraScanCallback callback) {
         checkArgument(callback != null);
@@ -67,7 +63,7 @@ class YaraOutputProcessor {
         // Identifier first, tags second. Cannot be null or empty and
         String ruleId = checkTokenType(tokenizer.next(LineTokenizer.TokenType.IDENTIFIER),
                 LineTokenizer.TokenType.IDENTIFIER);
-        rule = new YaraRuleImpl(ruleId);
+        rule = new YaraRule(ruleId);
 
         // Move to the start of tags
         checkTokenType(tokenizer.next(LineTokenizer.TokenType.LFTSQ_BRACKET),
@@ -126,13 +122,13 @@ class YaraOutputProcessor {
             temp = tokens.next();
             switch (temp.Type) {
                 case STRING:
-                    rule.addMeta(new YaraMetaImpl(metaId, Utils.unescape(temp.Value)));
+                    rule.addMeta(new YaraMeta(metaId, Utils.unescape(temp.Value)));
                     break;
                 case NUMBER:
-                    rule.addMeta(new YaraMetaImpl(metaId, Integer.decode(temp.Value)));
+                    rule.addMeta(new YaraMeta(metaId, Integer.decode(temp.Value)));
                     break;
                 case IDENTIFIER:
-                    rule.addMeta(new YaraMetaImpl(metaId, Boolean.valueOf(temp.Value)));
+                    rule.addMeta(new YaraMeta(metaId, Boolean.valueOf(temp.Value)));
                     break;
                 default:
                     throw new IllegalArgumentException();
@@ -178,7 +174,7 @@ class YaraOutputProcessor {
 
         // Add match to string
         if (string == null || !identifier.equals(string.getIdentifier())) {
-            string = new YaraStringImpl(identifier);
+            string = new YaraString(identifier);
             rule.addString(string); // rule should not be null
         }
 
